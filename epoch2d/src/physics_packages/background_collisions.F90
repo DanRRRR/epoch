@@ -621,7 +621,8 @@ CONTAINS
     ! Sampling in Perez (2012), eq. 11
     IF (s12 < 0.1_num) THEN
       ! 5e-9 limit prevents |cos(theta)| > 1
-      cos_theta = 1.0_num + s12 * LOG(MAX(random(), 5e-9_num))
+      ! random() is double precision, so the kind of the limit must match
+      cos_theta = 1.0_num + s12 * LOG(MAX(random(), 5e-9_dbl))
       RETURN
     ELSE IF (s12 < 3.0_num) THEN
       s12_2 = s12**2

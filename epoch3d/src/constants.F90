@@ -21,7 +21,16 @@ MODULE constants
 
   IMPLICIT NONE
 
+  ! 'num' is the working precision of the code (fields, particles, currents).
+  ! Build with -DSINGLE_PRECISION to run everything in 32-bit floats
+  ! (saves memory and bandwidth). 'dbl' always stays 64-bit and is used for
+  ! quantities which must not lose accuracy (timers) or which would otherwise
+  ! leave the range of 32-bit arithmetic.
+#ifdef SINGLE_PRECISION
+  INTEGER, PARAMETER :: num = KIND(1.0)
+#else
   INTEGER, PARAMETER :: num = KIND(1.d0)
+#endif
   INTEGER, PARAMETER :: dbl = KIND(1.d0)
   INTEGER, PARAMETER :: r4  = SELECTED_REAL_KIND(r=30)
   INTEGER, PARAMETER :: i4  = SELECTED_INT_KIND(9)  ! 4-byte 2^31 ~ 10^9
@@ -224,32 +233,44 @@ MODULE constants
   ! m0 * c**2
   REAL(num), PARAMETER :: m0c2 = mc0 * c
 
+  ! Double precision copies of the SI constants. Needed because some of the
+  ! intermediate products below (e.g. (q0/c)**2 ~ 2.8e-55 or 1/mc0**2 ~ 1.3e43)
+  ! fall outside the range of 32-bit arithmetic when num is single. The
+  ! derived constants are therefore always evaluated in 64-bit and only
+  ! converted when used.
+  REAL(dbl), PARAMETER :: pi_d = pi, q0_d = q0, m0_d = m0, c_d = c
+  REAL(dbl), PARAMETER :: epsilon0_d = epsilon0, kb_d = kb
+  REAL(dbl), PARAMETER :: h_bar_d = h_bar, h_planck_d = h_planck
+  REAL(dbl), PARAMETER :: alpha_d = alpha
+
   ! Constants used in pair production
 #ifdef PHOTONS
   ! b_s = mc0**2 / (h_bar * q0)
-  REAL(num), PARAMETER :: b_s = 4.414005028109566589829741352306303e9_num
+  REAL(dbl), PARAMETER :: b_s = 4.414005028109566589829741352306303e9_dbl
   ! e_s = b_s * c
-  REAL(num), PARAMETER :: e_s = 1.323285417001326061279735961512150e18_num
+  REAL(dbl), PARAMETER :: e_s = 1.323285417001326061279735961512150e18_dbl
   ! alpha_f = q0**2 / (2.0_num * epsilon0 * h_planck * c)
-  REAL(num), PARAMETER :: alpha_f = 7.297352575523020256850802729527158e-3_num
+  REAL(dbl), PARAMETER :: alpha_f = 7.297352575523020256850802729527158e-3_dbl
   ! tau_c = h_bar / (m0 * c**2)
-  REAL(num), PARAMETER :: tau_c = 1.288088667367242662108649212042082e-21_num
-  REAL(num), PARAMETER :: classical_re = 0.25_num / pi / epsilon0 / m0 &
-      * (q0 / c)**2
-  REAL(num), PARAMETER :: sigma_lBW_max = pi * classical_re**2 * &
-          0.6817055055017870382984600045421994441648264608312_num
-  REAL(num), PARAMETER :: inv_c = 1.0_num / c
-  REAL(num), PARAMETER :: inv_mc0_sq = 1.0_num / mc0 / mc0
-  REAL(num), PARAMETER :: half_pire2 = 0.5_num * pi * classical_re**2
-  REAL(num), PARAMETER :: quarter_pire2 = 0.25_num * pi * classical_re**2
+  REAL(dbl), PARAMETER :: tau_c = 1.288088667367242662108649212042082e-21_dbl
+  REAL(dbl), PARAMETER :: classical_re = 0.25_dbl / pi_d / epsilon0_d / m0_d &
+      * (q0_d / c_d)**2
+  REAL(dbl), PARAMETER :: sigma_lBW_max = pi_d * classical_re**2 * &
+          0.6817055055017870382984600045421994441648264608312_dbl
+  REAL(dbl), PARAMETER :: inv_c = 1.0_dbl / c_d
+  ! NOTE: 1/mc0**2 ~ 1.3e43 is beyond single precision range, hence dbl
+  REAL(dbl), PARAMETER :: inv_mc0_sq = 1.0_dbl / mc0 / mc0
+  REAL(dbl), PARAMETER :: half_pire2 = 0.5_dbl * pi_d * classical_re**2
+  REAL(dbl), PARAMETER :: quarter_pire2 = 0.25_dbl * pi_d * classical_re**2
 #endif
 
   ! Constants used for bremsstrahlung with plasma screening
 #ifdef BREMSSTRAHLUNG
-  REAL(num), PARAMETER :: e_radius = 0.25_num / pi / epsilon0 / m0 * (q0 / c)**2
-  REAL(num), PARAMETER :: log_plasma_screen_const_1 = LOG(1.4_num / alpha)
-  REAL(num), PARAMETER :: log_plasma_screen_const_2 = &
-      LOG(SQRT(epsilon0 * kb) / q0 * m0 * c * alpha / 1.4_num / h_bar)
+  REAL(dbl), PARAMETER :: e_radius = 0.25_dbl / pi_d / epsilon0_d / m0_d &
+      * (q0_d / c_d)**2
+  REAL(dbl), PARAMETER :: log_plasma_screen_const_1 = LOG(1.4_dbl / alpha_d)
+  REAL(dbl), PARAMETER :: log_plasma_screen_const_2 = &
+      LOG(SQRT(epsilon0_d * kb_d) / q0_d * m0_d * c_d * alpha_d / 1.4_dbl / h_bar_d)
 #endif
 
   ! define special particle IDs

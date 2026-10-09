@@ -29,15 +29,17 @@ MODULE redblack_module
   TYPE(particle_list), DIMENSION(:), POINTER :: pointers_send, pointers_recv
   INTEGER(i8), DIMENSION(:), POINTER :: sendcounts, recvcounts
 
+  ! NOTE: The _r4 variants are deliberately not part of the generic interface.
+  ! When the code is built in single precision (num == r4) they would clash
+  ! with the num variants making the interface ambiguous. Nothing in the code
+  ! calls them through the generic name anyway; if needed they can be called
+  ! directly as redblack1d_r4 etc.
   INTERFACE redblack
     MODULE PROCEDURE &
         redblackpart, &
         redblack1d, &
         redblack2d, &
-        redblack3d, &
-        redblack1d_r4, &
-        redblack2d_r4, &
-        redblack3d_r4
+        redblack3d
   END INTERFACE redblack
 
 CONTAINS

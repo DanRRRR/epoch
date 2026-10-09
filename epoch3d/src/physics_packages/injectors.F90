@@ -348,8 +348,11 @@ CONTAINS
 
         npart_ideal = injector%npart_per_cell * v_inject * density_correction &
             * dt / cell_size
-        itemp = random_box_muller(0.5_num * SQRT(npart_ideal &
-            * (1.0_num - npart_ideal / injector%npart_per_cell))) + npart_ideal
+        ! random_box_muller always works in double precision, so promote the
+        ! argument and demote the result explicitly
+        itemp = REAL(random_box_muller(0.5_dbl * SQRT(npart_ideal &
+            * (1.0_num - npart_ideal / injector%npart_per_cell))), num) &
+            + npart_ideal
         injector%depth(ii,jj) = injector%depth(ii,jj) - itemp
 
         IF (injector%depth(ii,jj) >= 0.0_num) CYCLE

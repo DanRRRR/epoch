@@ -167,6 +167,28 @@ else
   endif
 endif
 
+# CPU specific optimisation (vectorisation)
+# ==========================================
+# Build with "make ARCH=native" to tune for the machine the code is compiled
+# on. On AVX512 capable CPUs this lets the compiler generate 512-bit vector
+# code (AVX512F/DQ/CD/BW/VL). Alternatively a specific architecture can be
+# given, e.g. "make ARCH=znver4" or "make ARCH=skylake-avx512".
+ifneq ($(strip $(ARCH)),)
+  FFLAGS += -march=$(ARCH) -mtune=$(ARCH)
+endif
+
+# Fast (but slightly relaxed) floating point maths
+# ================================================
+# Build with "make FASTMATH=yes" to allow the compiler to reassociate
+# floating point expressions (-ffast-math). This unlocks vectorisation of
+# the reductions in the current deposition and field solvers and typically
+# gives a few extra percent on top of PRECISION=single. The physics stays
+# valid but round-off behaviour changes, so compare runs built with and
+# without this option only at the level of integral quantities.
+ifeq ($(strip $(FASTMATH)),yes)
+  FFLAGS += -ffast-math
+endif
+
 MPIF90 ?= mpif90
 FFLAGS += -I$(SDF)/include
 FFLAGS += $(MODULEFLAG)
@@ -177,6 +199,18 @@ TARGET = epoch1d
 
 # Set pre-processor defines
 DEFINES := $(DEFINE)
+
+# Floating point precision
+# ========================
+# Build with "make PRECISION=single" to run the code in 32-bit floating
+# point arithmetic. This halves the memory used by fields, particles and
+# currents and reduces memory bandwidth, which speeds the code up.
+# Particle counters, timers and a few physical constants whose intermediate
+# values leave the 32-bit range stay in 64-bit automatically.
+# Default is PRECISION=double which is the original 64-bit behaviour.
+ifeq ($(strip $(PRECISION)),single)
+  DEFINES += $(D)SINGLE_PRECISION
+endif
 
 # The following are a list of pre-processor defines which can be added to
 # the above line modifying the code behaviour at compile time.

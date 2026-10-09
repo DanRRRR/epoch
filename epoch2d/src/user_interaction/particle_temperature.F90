@@ -227,25 +227,38 @@ CONTAINS
     REAL(num), DIMENSION(c_ndirs), INTENT(IN) :: drift
     REAL(num), DIMENSION(c_ndirs) :: momentum_from_temperature_relativistic
 
+    ! This sampler is evaluated entirely in 64-bit arithmetic because some
+    ! of the constants involved (c^2/kb ~ 6.5e39, 2.36e-80) leave the range
+    ! of 32-bit reals, and because pfac can become very large for low
+    ! temperatures. It is only used during setup / boundary injection, so
+    ! this has no effect on the performance of the core code.
     ! Three parameters for calculating the range of momenta
     ! Includes different combinations of physical constants
-    REAL(num), PARAMETER :: param1 = -3.07236e-40_num
-    REAL(num), PARAMETER :: param2 = 2.35985e-80_num
+    REAL(dbl), PARAMETER :: param1 = -3.07236e-40_dbl
+    REAL(dbl), PARAMETER :: param2 = 2.35985e-80_dbl
     ! c^2/kb
-    REAL(num), PARAMETER :: c2_k = 6.509658203714208e39_num
-    REAL(num) :: rand, probability
-    REAL(num), DIMENSION(c_ndirs) :: momentum, mmc
-    REAL(num) :: mod_momentum, mass_c, pfac, drift_2
-    REAL(num) :: momentum1_2, momentum2_2, momentum3_2
-    REAL(num) :: temp, p_max_x, p_max_y, p_max_z, p_max
-    REAL(num) :: temp_norm1, temp_norm2, temp_norm3
-    REAL(num) :: temp_fac1, temp_fac2, temp_fac3
+    REAL(dbl), PARAMETER :: c2_k = 6.509658203714208e39_dbl
+    REAL(dbl), PARAMETER :: c_tiny_d = TINY(1.0_dbl)
+    REAL(dbl) :: rand, probability
+    REAL(dbl), DIMENSION(c_ndirs) :: momentum, mmc
+    REAL(dbl) :: mod_momentum, mass_c, pfac, drift_2
+    REAL(dbl) :: momentum1_2, momentum2_2, momentum3_2
+    REAL(dbl) :: temp, p_max_x, p_max_y, p_max_z, p_max
+    REAL(dbl) :: temp_norm1, temp_norm2, temp_norm3
+    REAL(dbl) :: temp_fac1, temp_fac2, temp_fac3
+    REAL(dbl) :: mass_d, cutoff_d
+    REAL(dbl), DIMENSION(c_ndirs) :: temperature_d, drift_d
     INTEGER :: dof
-    REAL(num) :: inter1, inter2, inter3
-    REAL(num) :: gamma_before, gamma_after, gamma_drift, gamma_drift_fac
+    REAL(dbl) :: inter1, inter2, inter3
+    REAL(dbl) :: gamma_before, gamma_after, gamma_drift, gamma_drift_fac
     LOGICAL :: no_drift
 
-    dof = COUNT(temperature > c_tiny)
+    mass_d = mass
+    cutoff_d = cutoff
+    temperature_d = temperature
+    drift_d = drift
+
+    dof = COUNT(temperature_d > c_tiny_d)
 
     ! If there are no degrees of freedom them sampling is unnecessary
     ! plasma is cold
@@ -254,39 +267,39 @@ CONTAINS
       RETURN
     END IF
 
-    temp = SUM(temperature) / REAL(dof, num)
-    temp_norm1 = temperature(1) / temp
-    temp_norm2 = temperature(2) / temp
-    temp_norm3 = temperature(3) / temp
-    temp_fac1 = 1.0_num / MAX(temp_norm1, c_tiny)
-    temp_fac2 = 1.0_num / MAX(temp_norm2, c_tiny)
-    temp_fac3 = 1.0_num / MAX(temp_norm3, c_tiny)
-    mass_c = mass * c
+    temp = SUM(temperature_d) / REAL(dof, dbl)
+    temp_norm1 = temperature_d(1) / temp
+    temp_norm2 = temperature_d(2) / temp
+    temp_norm3 = temperature_d(3) / temp
+    temp_fac1 = 1.0_dbl / MAX(temp_norm1, c_tiny_d)
+    temp_fac2 = 1.0_dbl / MAX(temp_norm2, c_tiny_d)
+    temp_fac3 = 1.0_dbl / MAX(temp_norm3, c_tiny_d)
+    mass_c = mass_d * c
 
-    p_max = SQRT(param1 * mass * temp * LOG(cutoff) &
-        + param2 * temp**2 * LOG(cutoff)**2) / mass
+    p_max = SQRT(param1 * mass_d * temp * LOG(cutoff_d) &
+        + param2 * temp**2 * LOG(cutoff_d)**2) / mass_d
 
     p_max_x = p_max * SQRT(temp_norm1)
     p_max_y = p_max * SQRT(temp_norm2)
     p_max_z = p_max * SQRT(temp_norm3)
 
-    pfac = -c2_k * mass / temp
+    pfac = -c2_k * mass_d / temp
 
-    drift_2 = DOT_PRODUCT(drift, drift)
-    IF (drift_2 < c_tiny) THEN
+    drift_2 = DOT_PRODUCT(drift_d, drift_d)
+    IF (drift_2 < c_tiny_d) THEN
       no_drift = .TRUE.
     ELSE
       no_drift = .FALSE.
-      gamma_drift = SQRT(1.0_num + drift_2 / mass_c**2)
-      gamma_drift_fac = 0.5_num / gamma_drift
+      gamma_drift = SQRT(1.0_dbl + drift_2 / mass_c**2)
+      gamma_drift_fac = 0.5_dbl / gamma_drift
     END IF
 
     ! Loop around until a momentum is accepted for this particle
     DO
       ! Generate random x and y momenta between p_min and p_max
-      momentum(1) = random() * 2.0_num * p_max_x - p_max_x
-      momentum(2) = random() * 2.0_num * p_max_y - p_max_y
-      momentum(3) = random() * 2.0_num * p_max_z - p_max_z
+      momentum(1) = random() * 2.0_dbl * p_max_x - p_max_x
+      momentum(2) = random() * 2.0_dbl * p_max_y - p_max_y
+      momentum(3) = random() * 2.0_dbl * p_max_z - p_max_z
 
       momentum1_2 = momentum(1)**2
       momentum2_2 = momentum(2)**2
@@ -302,8 +315,8 @@ CONTAINS
       inter1 = momentum1_2 * temp_fac1
       inter2 = momentum2_2 * temp_fac2
       inter3 = momentum3_2 * temp_fac3
-      probability = EXP(pfac * (SQRT(1.0_num + inter1 + inter2 + inter3) &
-                                - 1.0_num))
+      probability = EXP(pfac * (SQRT(1.0_dbl + inter1 + inter2 + inter3) &
+                                - 1.0_dbl))
 
       ! Once you know your probability you just generate a random number
       ! between 0 and 1 and if the generated number is less than the
@@ -314,14 +327,14 @@ CONTAINS
       mmc = momentum * mass_c
       IF (no_drift) EXIT
 
-      CALL drift_lorentz_transform(mmc, mass_c, drift, &
+      CALL drift_lorentz_transform(mmc, mass_c, drift_d, &
           gamma_before, gamma_after, gamma_drift)
 
       rand = random()
       IF (rand < gamma_drift_fac * (gamma_after / gamma_before)) EXIT
     END DO
 
-    momentum_from_temperature_relativistic = mmc
+    momentum_from_temperature_relativistic = REAL(mmc, num)
 
   END FUNCTION momentum_from_temperature_relativistic
 
@@ -329,57 +342,59 @@ CONTAINS
 
   ! Subroutine takes a rest frame momentum and a drift momentum and Lorentz
   ! transforms the momentum subject to the specified drift.
+  ! Works in 64-bit arithmetic, see the comment above
+  ! momentum_from_temperature_relativistic
   SUBROUTINE drift_lorentz_transform(p, mass_c, drift, &
       gamma_before, gamma_after, gamma_drift)
 
-    REAL(num), DIMENSION(c_ndirs), INTENT(INOUT) :: p
-    REAL(num), INTENT(IN) :: mass_c
-    REAL(num), DIMENSION(c_ndirs), INTENT(IN) :: drift
-    REAL(num), INTENT(OUT) :: gamma_before, gamma_after
-    REAL(num), INTENT(IN) :: gamma_drift
-    REAL(num), DIMENSION(c_ndirs) :: p_mc, beta
-    REAL(num), DIMENSION(c_ndirs+1) :: p4_in
-    REAL(num), DIMENSION(c_ndirs,c_ndirs+1) :: boost_tensor
-    REAL(num) :: e_prime, imc, gamma_m1_beta2, p2
+    REAL(dbl), DIMENSION(c_ndirs), INTENT(INOUT) :: p
+    REAL(dbl), INTENT(IN) :: mass_c
+    REAL(dbl), DIMENSION(c_ndirs), INTENT(IN) :: drift
+    REAL(dbl), INTENT(OUT) :: gamma_before, gamma_after
+    REAL(dbl), INTENT(IN) :: gamma_drift
+    REAL(dbl), DIMENSION(c_ndirs) :: p_mc, beta
+    REAL(dbl), DIMENSION(c_ndirs+1) :: p4_in
+    REAL(dbl), DIMENSION(c_ndirs,c_ndirs+1) :: boost_tensor
+    REAL(dbl) :: e_prime, imc, gamma_m1_beta2, p2
     INTEGER :: i, j
 
-    imc = 1.0_num / mass_c
+    imc = 1.0_dbl / mass_c
     p_mc = p * imc
-    gamma_before = SQRT(1.0_num + DOT_PRODUCT(p_mc, p_mc))
+    gamma_before = SQRT(1.0_dbl + DOT_PRODUCT(p_mc, p_mc))
     e_prime = gamma_before * mass_c
 
     beta = -drift * imc / gamma_drift ! Lorentz beta vector
 
-    gamma_m1_beta2 = (gamma_drift - 1.0_num) / DOT_PRODUCT(beta, beta)
+    gamma_m1_beta2 = (gamma_drift - 1.0_dbl) / DOT_PRODUCT(beta, beta)
 
     boost_tensor(1,1) = -beta(1) * gamma_drift
     boost_tensor(2,1) = -beta(2) * gamma_drift
     boost_tensor(3,1) = -beta(3) * gamma_drift
 
-    boost_tensor(1,2) = 1.0_num + gamma_m1_beta2 * beta(1)**2
+    boost_tensor(1,2) = 1.0_dbl + gamma_m1_beta2 * beta(1)**2
     boost_tensor(2,2) = gamma_m1_beta2 * beta(1) * beta(2)
     boost_tensor(3,2) = gamma_m1_beta2 * beta(1) * beta(3)
 
     boost_tensor(1,3) = gamma_m1_beta2 * beta(1) * beta(2)
-    boost_tensor(2,3) = 1.0_num + gamma_m1_beta2 * beta(2)**2
+    boost_tensor(2,3) = 1.0_dbl + gamma_m1_beta2 * beta(2)**2
     boost_tensor(3,3) = gamma_m1_beta2 * beta(2) * beta(3)
 
     boost_tensor(1,4) = gamma_m1_beta2 * beta(1) * beta(3)
     boost_tensor(2,4) = gamma_m1_beta2 * beta(2) * beta(3)
-    boost_tensor(3,4) = 1.0_num + gamma_m1_beta2 * beta(3)**2
+    boost_tensor(3,4) = 1.0_dbl + gamma_m1_beta2 * beta(3)**2
 
     p4_in = [e_prime, p(1), p(2), p(3)]
-    p2 = 0.0_num
+    p2 = 0.0_dbl
 
     DO i = 1, 3
-      p(i) = 0.0_num
+      p(i) = 0.0_dbl
       DO j = 1, 4
         p(i) = p(i) + p4_in(j) * boost_tensor(i,j)
       END DO
       p2 = p2 + (p(i) * imc)**2
     END DO
 
-    gamma_after = SQRT(1.0_num + p2)
+    gamma_after = SQRT(1.0_dbl + p2)
 
   END SUBROUTINE drift_lorentz_transform
 
@@ -476,6 +491,11 @@ CONTAINS
     REAL(num) :: rand, probability, mass_c, drift_2
     REAL(num) :: gamma_before, gamma_after, gamma_drift, gamma_drift_fac
     REAL(num) :: range_diff1, range_diff2, range_diff3
+    ! 64-bit copies for the call to drift_lorentz_transform, which works in
+    ! double precision (see comment in momentum_from_temperature_relativistic)
+    REAL(dbl), DIMENSION(c_ndirs) :: pack_p_d, drift_d
+    REAL(dbl) :: mass_c_d, gamma_before_d, gamma_after_d, gamma_drift_d
+    REAL(dbl) :: gamma_drift_fac_d
     INTEGER :: err
     INTEGER(i8) :: it
     LOGICAL :: no_drift
@@ -491,6 +511,10 @@ CONTAINS
       mass_c = mass * c
       gamma_drift = SQRT(1.0_num + drift_2 / mass_c**2)
       gamma_drift_fac = 0.5_num / gamma_drift
+      mass_c_d = mass_c
+      drift_d = drift
+      gamma_drift_d = gamma_drift
+      gamma_drift_fac_d = 0.5_dbl / gamma_drift_d
     END IF
 
     range_diff1 = ranges(1,2) - ranges(1,1)
@@ -518,11 +542,13 @@ CONTAINS
 
       IF (no_drift) EXIT
 
-      CALL drift_lorentz_transform(parameters%pack_p, mass_c, drift, &
-          gamma_before, gamma_after, gamma_drift)
+      pack_p_d = parameters%pack_p
+      CALL drift_lorentz_transform(pack_p_d, mass_c_d, drift_d, &
+          gamma_before_d, gamma_after_d, gamma_drift_d)
+      parameters%pack_p = REAL(pack_p_d, num)
 
       rand = random()
-      IF (rand < gamma_drift_fac * (gamma_after / gamma_before)) EXIT
+      IF (rand < gamma_drift_fac_d * (gamma_after_d / gamma_before_d)) EXIT
     END DO
 
     IF (PRESENT(it_r)) it_r = it
